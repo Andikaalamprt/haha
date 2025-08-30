@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Prank — Layar Disadap</title>
+<style>
+  html,body { height:100%; margin:0; background:black; overflow:hidden; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+  /* canvas noise covers whole screen */
+  #noiseCanvas { position:fixed; inset:0; width:100vw; height:100vh; z-index:10; display:block; }
+  /* overlay dark layer for dramatic effect */
+  #dark { position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:20; pointer-events:none; }
+  /* scrolling repeated text container */
+  .marquee-wrap { position:fixed; left:0; right:0; bottom:45%; height:3.2rem; overflow:hidden; z-index:30; display:flex; align-items:center; }
+  .marquee {
+    display:inline-block;
+    white-space:nowrap;
+    font-weight:900;
+    font-size:2.2rem;
+    letter-spacing:0.08rem;
+    text-transform:uppercase;
+    -webkit-text-stroke: 1px rgba(255,255,255,0.06);
+    color: transparent;
+    background: linear-gradient(90deg, #ff6b6b, #ffd93d, #7ef6c5, #6b8cff);
+    background-clip: text;
+    -webkit-background-clip: text;
+    animation: slide 6s linear infinite;
+  }
+  /* duplicate to make continuous stream */
+  .marquee + .marquee { margin-left:3rem; }
+
+  @keyframes slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* small instruction / exit hint */
+  #hint { position:fixed; left:8px; bottom:8px; z-index:40; color:rgba(255,255,255,0.25); font-size:0.78rem; }
+  /* full-screen button (optional, hidden visually) */
+  #fsBtn { position:fixed; top:6px; right:6px; z-index:50; opacity:0.01; pointer-events:auto; }
+</style>
+</head>
+<body>
+
+<canvas id="noiseCanvas"></canvas>
+<div id="dark"></div>
+
+<div class="marquee-wrap" aria-hidden="true">
+  <div class="marquee" id="mar1">HP ANDA SAYA SADAP HAHAHAHAHA — HP ANDA SAYA SADAP HAHAHAHAHA — </div>
+  <div class="marquee" id="mar2">HP ANDA SAYA SADAP HAHAHAHAHA — HP ANDA SAYA SADAP HAHAHAHAHA — </div>
+</div>
+
+<div id="hint">Tekan <kbd>Esc</kbd> atau tutup tab untuk keluar.</div>
+
+<!-- invisible fullscreen trigger so opening page from a click often allows requestFullscreen -->
+<button id="fsBtn" aria-hidden="true">Fullscreen</button>
+
+<script>
+(function(){
+  const canvas = document.getElementById('noiseCanvas');
+  const ctx = canvas.getContext('2d');
+  let w = canvas.width = innerWidth;
+  let h = canvas.height = innerHeight;
+
+  // Resize handler
+  window.addEventListener('resize', ()=> {
+    w = canvas.width = innerWidth;
+    h = canvas.height = innerHeight;
+  });
+
+  // Draw static noise + occasional colored "kresek" lines
+  function frame() {
+    // create image data random noise
+    const imageData = ctx.createImageData(w, h);
+    const data = imageData.data;
+    // fill with sparse noise for performance
+    for (let i=0; i < data.length; i += 4) {
+      const rnd = (Math.random() * 255) | 0;
+      // small chance to be brighter
+      const v = (Math.random() < 0.03) ? (rnd) : (rnd * 0.18);
+      data[i] = v;      // R
+      data[i+1] = v;    // G
+      data[i+2] = v;    // B
+      data[i+3] = 255;  // A
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    // draw colored horizontal streaks ("kresek warna")
+    const lines = 6;
+    for (let i=0;i<lines;i++){
+      if (Math.random() < 0.12) {
+        const y = Math.random() * h;
+        const thickness = 1 + Math.random()*6;
+        ctx.fillStyle = `hsla(${Math.random()*360}, 90%, 60%, ${0.45 + Math.random()*0.35})`;
+        ctx.fillRect(0, y, w, thickness);
+        // small glint
+        if (Math.random() < 0.25) {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.fillStyle = `hsla(${Math.random()*360}, 90%, 65%, 0.25)`;
+          ctx.fillRect(Math.random()*w, y-2, 80 + Math.random()*200, thickness+2);
+          ctx.globalCompositeOperation = 'source-over';
+        }
+      }
+    }
+
+    // subtle vignette
+    const grad = ctx.createRadialGradient(w/2, h/2, Math.min(w,h)/6, w/2, h/2, Math.max(w,h));
+    grad.addColorStop(0, 'rgba(0,0,0,0.0)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.7)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,w,h);
+
+    requestAnimationFrame(frame);
+  }
+
+  // Start animation
+  requestAnimationFrame(frame);
+
+  // Try to request fullscreen on user gesture or on load (may be blocked)
+  function tryFullscreen() {
+    const el = document.documentElement;
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(()=>{/*ignore*/});
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    }
+  }
+
+  // Attempt when user first interacts (click / touch)
+  let interacted = false;
+  function onFirstInteraction(e){
+    if (interacted) return;
+    interacted = true;
+    tryFullscreen();
+    // small visual shake: temporarily increase contrast
+    document.getElementById('dark').style.transition = 'filter 350ms';
+    document.getElementById('dark').style.filter = 'brightness(0.8) saturate(1.4)';
+    setTimeout(()=> {
+      document.getElementById('dark').style.filter = '';
+    }, 400);
+  }
+  ['click','touchstart','keydown'].forEach(ev => window.addEventListener(ev, onFirstInteraction, {once:true}));
+
+  // prevent context menu to be polite? keep allowed to close devtools etc
+  window.addEventListener('contextmenu', (e)=> e.preventDefault());
+
+  // Small accessibility: pressing ESC (default) or clicking/ tapping quickly ends nothing special: user can close
+  // Provide easter-quit: triple-tap with two fingers to show a friendly message (optional)
+  let taps = 0;
+  let lastTap = 0;
+  window.addEventListener('touchstart', ()=>{
+    const t = Date.now();
+    if (t - lastTap < 600) taps++; else taps = 1;
+    lastTap = t;
+    if (taps >= 3) {
+      // remove canvas and show short message then allow exit
+      canvas.style.transition = 'opacity 300ms';
+      canvas.style.opacity = '0.06';
+      document.querySelector('.marquee-wrap').style.opacity = '0.2';
+      const h = document.getElementById('hint');
+      h.innerText = 'Prank dimatikan — tutup tab untuk keluar.';
+      h.style.color = 'rgba(255,255,255,0.6)';
+    }
+  });
+
+  // Make the marquees out-of-sync for variety
+  const m1 = document.getElementById('mar1');
+  const m2 = document.getElementById('mar2');
+  // speed randomization
+  m1.style.animationDuration = (5 + Math.random()*3) + 's';
+  m2.style.animationDuration = (6 + Math.random()*5) + 's';
+})();
+</script>
+</body>
+</html>
